@@ -41,28 +41,53 @@ export default function HashVisualizer({ hashHex, algorithmType, size = 280 }) {
 
     const bin = hexToBin(hashHex);
     let paddedBin = bin;
+    let padIndex = 1;
     // Pad to ensure we have plenty of bits for points
     while(paddedBin.length < 2048) {
-      paddedBin += bin;
+      let mixedBin = '';
+      for (let i = 0; i < bin.length; i += 8) {
+          const chunk = bin.slice(i, i + 8);
+          const val = parseInt(chunk, 2) ^ (padIndex % 256);
+          mixedBin += val.toString(2).padStart(chunk.length, '0');
+      }
+      paddedBin += mixedBin;
+      padIndex++;
     }
 
-    const getParam = (index) => parseInt(paddedBin.substring((index * 8) % paddedBin.length, ((index + 1) * 8) % paddedBin.length) || '0', 2);
+    const getParam = (index) => {
+        const start = (index * 8) % paddedBin.length;
+        return parseInt(paddedBin.substring(start, start + 8) || '0', 2);
+    };
 
     // 25 to 45 points based on the first byte
-    const pointsCount = 25 + (getParam(0) % 20); 
+    const targetPointsCount = 25 + (getParam(0) % 20); 
     const points = [];
     
     const globalHueShift = getParam(1) * (360/255);
 
     // Extract point coordinates and hues from hash bits
-    for(let i=0; i<pointsCount; i++) {
-        const offset = (i + 1) * 3;
+    let offsetIndex = 1;
+    while(points.length < targetPointsCount && offsetIndex < 200) {
+        const offset = offsetIndex * 3;
         const pX = (getParam(offset) / 255) * size;
         const pY = (getParam(offset + 1) / 255) * size;
         // Map hue with global shift for unified color palettes
         const pHue = (globalHueShift + (getParam(offset + 2) * (180/255))) % 360;
-        points.push({x: pX, y: pY, hue: pHue});
+        
+        let isDuplicate = false;
+        for(let j=0; j<points.length; j++) {
+            if (points[j].x === pX && points[j].y === pY) {
+                isDuplicate = true;
+                break;
+            }
+        }
+        
+        if (!isDuplicate) {
+            points.push({x: pX, y: pY, hue: pHue});
+        }
+        offsetIndex++;
     }
+    const pointsCount = points.length;
 
     const isCrypto = algorithmType === 'cryptographic';
 
